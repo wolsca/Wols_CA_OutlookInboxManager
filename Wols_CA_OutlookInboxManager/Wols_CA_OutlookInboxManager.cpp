@@ -95,7 +95,7 @@ std::vector<std::string> ConfigManager::GetConfigArray(const std::string& key) c
 }
 
 // ==============================================================================
-// RulesManager (With Session Tracking)
+// RulesManager 
 // ==============================================================================
 RulesManager::RulesManager(const std::string& rulesFilePath) : m_rulesFile(rulesFilePath)
 {
@@ -129,7 +129,7 @@ void RulesManager::AddRuleInMemory(const std::string& senderAddress , const std:
     std::lock_guard<std::mutex> lock(m_mutex);
     if ( m_ruleMap.find(senderAddress) == m_ruleMap.end( ) )
     {
-        m_sessionNewSenders.insert(senderAddress); // Track that it was added this session
+        m_sessionNewSenders.insert(senderAddress);
     }
     m_ruleMap[ senderAddress ] = folderPath;
 }
@@ -221,8 +221,6 @@ CComVariant OutlookManager::GetProperty(IDispatch* pDisp , LPCOLESTR name)
     InvokeMethod(pDisp , name , DISPATCH_PROPERTYGET , &result , &params);
     return result;
 }
-
-// Helper to SET properties (like Categories)
 HRESULT OutlookManager::PutProperty(IDispatch* pDisp , LPCOLESTR name , VARIANT* pVar)
 {
     DISPID dispid; LPOLESTR nonConstName = const_cast< LPOLESTR >( name );
@@ -233,7 +231,6 @@ HRESULT OutlookManager::PutProperty(IDispatch* pDisp , LPCOLESTR name , VARIANT*
     params.cNamedArgs = 1; params.rgdispidNamedArgs = &dispidNamed;
     return pDisp->Invoke(dispid , IID_NULL , LOCALE_USER_DEFAULT , DISPATCH_PROPERTYPUT , &params , NULL , NULL , NULL);
 }
-
 void OutlookManager::EnsureDownloadDirExists( )
 {
     if ( m_downloadDir.empty( ) ) return;
@@ -250,7 +247,6 @@ void OutlookManager::EnsureDownloadDirExists( )
     std::error_code ec;
     if ( !std::filesystem::exists(dir , ec) && !ec ) std::filesystem::create_directories(dir , ec);
 }
-
 CComPtr<IDispatch> OutlookManager::GetInbox( )
 {
     if ( !m_mapiNamespace ) return nullptr;
@@ -270,7 +266,6 @@ CComPtr<IDispatch> OutlookManager::EnsureFolderExists(CComPtr<IDispatch> parentF
     if ( SUCCEEDED(InvokeMethod(folders , L"Add" , DISPATCH_METHOD , &newFolderVar , &addParams)) && newFolderVar.vt == VT_DISPATCH ) return newFolderVar.pdispVal;
     return nullptr;
 }
-
 std::string OutlookManager::GetSenderAddress(CComPtr<IDispatch> mailItem)
 {
     CComVariant senderProp = GetProperty(mailItem , L"SenderEmailAddress");
@@ -288,7 +283,6 @@ std::string OutlookManager::GetSenderAddress(CComPtr<IDispatch> mailItem)
     }
     return "";
 }
-
 std::string OutlookManager::GetMailBody(CComPtr<IDispatch> mailItem)
 {
     CComVariant bodyProp = GetProperty(mailItem , L"Body");
@@ -305,7 +299,6 @@ std::string OutlookManager::GetMailBody(CComPtr<IDispatch> mailItem)
     }
     return "";
 }
-
 bool OutlookManager::HasAttachments(CComPtr<IDispatch> mailItem)
 {
     CComVariant attVar = GetProperty(mailItem , L"Attachments");
@@ -316,7 +309,6 @@ bool OutlookManager::HasAttachments(CComPtr<IDispatch> mailItem)
     }
     return false;
 }
-
 bool OutlookManager::ContainsPrices(const std::string& text)
 {
     std::string regexStr = m_config->GetConfigString("price_regex");
@@ -332,32 +324,37 @@ bool OutlookManager::ContainsPrices(const std::string& text)
     }
 }
 
+// Check de platte JSON arrays voor multi-taal keywords
+bool OutlookManager::ContainsKeywords(const std::string& text , const std::vector<std::string>& keywords)
+{
+    std::string lowerText = text;
+    std::transform(lowerText.begin( ) , lowerText.end( ) , lowerText.begin( ) , ::tolower);
+    for ( const auto& kw : keywords )
+    {
+        std::string lowerKw = kw;
+        std::transform(lowerKw.begin( ) , lowerKw.end( ) , lowerKw.begin( ) , ::tolower);
+        if ( lowerText.find(lowerKw) != std::string::npos ) return true;
+    }
+    return false;
+}
+
 void OutlookManager::SetCategory(CComPtr<IDispatch> mailItem , const std::string& categoryName)
 {
     if ( categoryName.empty( ) ) return;
     std::wstring wCat = m_config->Utf8ToWstring(categoryName);
     CComVariant catVar(wCat.c_str( ));
     PutProperty(mailItem , L"Categories" , &catVar);
-
-    // Outlook COM vereist expliciet een Save() na het instellen van properties
     DISPPARAMS saveParams = { NULL, NULL, 0, 0 }; CComVariant saveResult;
     InvokeMethod(mailItem , L"Save" , DISPATCH_METHOD , &saveResult , &saveParams);
 }
-
 void OutlookManager::SetFlagForProcess(CComPtr<IDispatch> mailItem , int daysFromNow)
 {
-    // Outlook Constant: olMarkThisWeek = 2, olMarkNextWeek = 3. 
-    // We gebruiken 'MarkAsTask' om de vlag actief te maken.
     CComVariant markFlag(2);
     DISPPARAMS flagParams = { &markFlag, NULL, 1, 0 }; CComVariant flagResult;
     InvokeMethod(mailItem , L"MarkAsTask" , DISPATCH_METHOD , &flagResult , &flagParams);
-
-    // Sla op
     DISPPARAMS saveParams = { NULL, NULL, 0, 0 }; CComVariant saveResult;
     InvokeMethod(mailItem , L"Save" , DISPATCH_METHOD , &saveResult , &saveParams);
 }
-
-
 std::string OutlookManager::GetFolderName(CComPtr<IDispatch> folder)
 {
     CComVariant nameProp = GetProperty(folder , L"Name");
@@ -377,7 +374,7 @@ std::string OutlookManager::GetFolderName(CComPtr<IDispatch> folder)
 }
 
 // ==============================================================================
-// PHASE 2 PREVIEW - Process Inbox (Met Visuele Routering)
+// PHASE 2 - Process Inbox (De Werkelijke Verwerking)
 // ==============================================================================
 void OutlookManager::ProcessInbox( )
 {
@@ -392,7 +389,6 @@ void OutlookManager::ProcessInbox( )
     if ( itemsVar.vt != VT_DISPATCH || !itemsVar.pdispVal ) return;
     CComPtr<IDispatch> items = itemsVar.pdispVal;
 
-    // --- DE PERFORMANCE WINST: ONGELEZEN FILTEREN ---
     CComPtr<IDispatch> workingItems = items;
     if ( m_config->GetConfigBool("process_unread_only") )
     {
@@ -409,7 +405,8 @@ void OutlookManager::ProcessInbox( )
     if ( countVar.vt != VT_I4 ) return;
     long count = countVar.lVal;
 
-    Logger::LogDebug("Aantal items voor evaluatie: " + std::to_string(count));
+    std::vector<std::string> invoiceKeys = m_config->GetConfigArray("invoice_keywords");
+    std::vector<std::string> orderKeys = m_config->GetConfigArray("order_keywords");
 
     for ( long i = count; i >= 1; --i )
     {
@@ -421,39 +418,50 @@ void OutlookManager::ProcessInbox( )
             if ( sender.empty( ) ) continue;
 
             std::string targetFolderName = m_rules->GetRule(sender);
+            std::string body = GetMailBody(mailItem);
 
-            // 1. TOTAAL ONBEKEND (Nog nooit gezien)
+            // 1. Onbekende afzender -> Quarantaine
             if ( targetFolderName.empty( ) )
             {
-                Logger::LogDebug("Nieuw adres gedetecteerd: " + sender + ". Routeer naar _New Address en tag Groen.");
-                std::string greenCat = m_config->GetConfigString("categories/new_first_green"); // Van JSON
-                SetCategory(mailItem , greenCat);
+                Logger::LogDebug("Nieuw adres: " + sender + ". Routeer naar _New Address en tag Groen.");
+                SetCategory(mailItem , m_config->GetConfigString("category_new_first_green"));
                 targetFolderName = m_config->GetConfigString("folder_new_address");
             }
-            // 2. BEKEND, MAAR AANGEMAAKT TIJDENS DEZE SESSIE
-            else if ( m_rules->IsNewSessionSender(sender) )
+            // 2. Bekende Contacten
+            else if ( targetFolderName == m_config->GetConfigString("folder_contacten") )
             {
-                Logger::LogDebug("Sessie-Adres gedetecteerd: " + sender + ". Tag Lichtgroen.");
-                std::string lightGreenCat = m_config->GetConfigString("categories/new_session_lightgreen");
-                SetCategory(mailItem , lightGreenCat);
+                Logger::LogDebug("Contact gedetecteerd: " + sender + ". Routeer direct naar _Contacten zonder factuurcontrole.");
+            }
+            // 3. Bekende Bedrijven (Inkoop / Order detectie)
+            else
+            {
+                if ( m_rules->IsNewSessionSender(sender) )
+                {
+                    SetCategory(mailItem , m_config->GetConfigString("category_new_session_lightgreen"));
+                }
+
+                // Controleer op Facturen
+                if ( ContainsKeywords(body , invoiceKeys) )
+                {
+                    targetFolderName = m_config->GetConfigString("folder_purchasing"); // Forceer naar Inkoop
+                    SetFlagForProcess(mailItem , 2);
+                    Logger::LogDebug("Factuur herkend voor " + sender + ". Vlag gezet en routeer naar " + targetFolderName);
+                }
+                // Controleer op Orders / Prijzen
+                else if ( ContainsKeywords(body , orderKeys) || ContainsPrices(body) )
+                {
+                    // Verplaats naar de normale bedrijfsmap, maar markeer eventueel
+                    Logger::LogDebug("Order/Prijs herkend voor " + sender + ". Routeer naar bedrijfsmap: " + targetFolderName);
+                }
+                // Geen herkenning en geen bijlage -> Visuele check nodig
+                else if ( !HasAttachments(mailItem) )
+                {
+                    Logger::LogDebug("Geen bijlage & Geen factuurwoorden voor " + sender + ". Flag Check (Oranje).");
+                    SetCategory(mailItem , m_config->GetConfigString("category_check_orange"));
+                }
             }
 
-            // 3. CHECK OP INHOUD (Ontbrekende bijlage / Prijzen)
-            std::string body = GetMailBody(mailItem);
-            if ( !HasAttachments(mailItem) && !ContainsPrices(body) )
-            {
-                Logger::LogDebug("Geen bijlage & Geen prijzen gevonden voor " + sender + ". Flag Check (Oranje).");
-                std::string checkCat = m_config->GetConfigString("categories/check_orange");
-                SetCategory(mailItem , checkCat);
-            }
-
-            // Voorbeeld: Nieuwe factuur detectie (simpel) -> Zet vlag!
-            if ( HasAttachments(mailItem) && ContainsPrices(body) )
-            {
-                SetFlagForProcess(mailItem , 2); // Zet vlag met deadline 2 dagen
-            }
-
-            // Move the mail
+            // Voer de fysieke verplaatsing uit
             if ( !targetFolderName.empty( ) )
             {
                 std::wstring wFolderName = m_config->Utf8ToWstring(targetFolderName);
@@ -500,7 +508,6 @@ void OutlookManager::AuditFolders( )
             {
                 CComPtr<IDispatch> items = itemsVar.pdispVal;
 
-                // Ook hier kunnen we de Unread filter toepassen als we dat willen
                 CComPtr<IDispatch> workingItems = items;
                 if ( m_config->GetConfigBool("process_unread_only") )
                 {
@@ -525,14 +532,13 @@ void OutlookManager::AuditFolders( )
 
                             std::string expectedFolder = m_rules->GetRule(sender);
 
-                            // Logica Stap 4: De "Leermodus" voor Contacten
                             if ( currentFolderName == m_config->GetConfigString("folder_contacten") ||
                                 currentFolderName == m_config->GetConfigString("folder_new_to_process") )
                             {
                                 if ( expectedFolder.empty( ) || expectedFolder == m_config->GetConfigString("folder_new_address") )
                                 {
                                     m_rules->AddRuleInMemory(sender , currentFolderName);
-                                    Logger::LogDebug("Leermodus: Nieuwe regel opgeslagen via handmatige sleep-actie [" + sender + "] -> [" + currentFolderName + "]");
+                                    Logger::LogDebug("Leermodus: Regel aangemaakt via drag-and-drop [" + sender + "] -> [" + currentFolderName + "]");
                                 }
                             } else if ( expectedFolder.empty( ) )
                             {
@@ -552,7 +558,7 @@ void OutlookManager::AuditFolders( )
 }
 
 
-// ... (De rest van het bestand mbt de UI en Main-loop blijft identiek) ...
+// ... UIManager en wWinMain ...
 UIManager::UIManager(ConfigManager* config , OutlookManager* outlook) : m_config(config) , m_outlookManager(outlook) , m_hwnd(NULL)
 {
     ZeroMemory(&m_nid , sizeof(m_nid));
@@ -584,8 +590,8 @@ LRESULT CALLBACK UIManager::WindowProc(HWND hwnd , UINT uMsg , WPARAM wParam , L
             int wmId = LOWORD(wParam);
             switch ( wmId )
             {
-                case 1001: pThis->m_outlookManager->ProcessInbox( ); break;
-                case 1002: pThis->m_outlookManager->AuditFolders( ); break;
+                case 1001: pThis->ShowNotification(L"Wols CA" , L"Inbox wordt verwerkt..."); pThis->m_outlookManager->ProcessInbox( ); pThis->ShowNotification(L"Wols CA" , L"Verwerking voltooid!"); break;
+                case 1002: pThis->ShowNotification(L"Wols CA" , L"Mappenstructuur wordt gecontroleerd..."); pThis->m_outlookManager->AuditFolders( ); pThis->ShowNotification(L"Wols CA" , L"Audit voltooid!"); break;
                 case 1003: ShellExecuteW(NULL , L"open" , L"Wols_CA_InboxManagerLanguage.json" , NULL , NULL , SW_SHOW); break;
                 case 1004: PostQuitMessage(0); break;
             }
