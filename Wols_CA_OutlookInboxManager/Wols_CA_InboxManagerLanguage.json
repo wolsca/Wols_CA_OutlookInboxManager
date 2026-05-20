@@ -1,0 +1,69 @@
+{
+  "languageBlok": "en"
+  {
+    "app_name": "Wols CA - Inbox Manager",
+    "tray_tooltip": "Inbox Manager is running",
+    "menu_quit": "Quit",
+    "menu_config": "Open Configuration",
+    "menu_process_now": "Process Inbox Now",
+    "menu_audit": "Audit Folder Structure",
+    "ui_title": "Incoming Email Routing",
+    "ui_sender": "Sender:",
+    "ui_subject": "Subject:",
+    "ui_select_folder": "Select Destination Folder:",
+    "ui_new_folder": "Or create new subfolder:",
+    "ui_button_move": "Move & Save Rule",
+    "ui_button_skip": "Skip for now",
+    "config": {
+      "chrome_path": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+      "outlook_path": "C:\\Program Files\\Microsoft Office\\root\\Office16\\OUTLOOK.EXE",
+      "folder_incoming_new": "_InComming New",
+      "folder_purchasing": "Inkoop",
+      "download_directory": "Outlook Invoices",
+      "rules_file": "routing_rules.json",
+      "log_file": "audit_log.txt",
+      "log_level": "NORMAL",
+      "poll_interval_seconds": 60,
+      "invoice_keywords": [ "factuur", "invoice", "nota", "rekening", "kwitantie", "purchase order", "po-" ],
+      "attachment_keywords": [ "pdf", "xml", "pdfa" ]
+    },
+    "document_keywords": {
+      "invoice": [
+        "factuur",
+        "nota",
+        "rekening",
+        "kwitantie", // NL
+        "invoice",
+        "receipt",
+        "bill", // EN
+        "rechnung",
+        "quittung",
+        "beleg", // DE
+        "facture",
+        "reçu",
+        "addition", // FR
+        "factura",
+        "recibo",
+        "comprobante", // ES
+        "fattura",
+        "ricevuta",
+        "scontrino" // IT
+      ],
+      "order": [
+        "orderbevestiging",
+        "bestelling",
+        "inkooporder", // NL
+        "order confirmation",
+        "purchase order",
+        "po-", // EN
+        "auftragsbestätigung",
+        "bestellbestätigung", // DE
+        "confirmation de commande",
+        "bon de commande", // FR
+        "confirmación de pedido",
+        "orden de compra", // ES
+        "conferma d'ordine",
+        "ordine di acquisto" // IT
+      ]
+    }
+  }

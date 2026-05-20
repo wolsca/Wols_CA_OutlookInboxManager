@@ -1,0 +1,5 @@
+C:/Users/OskarPWWols/source/repos/Wols_CA_OutlookInboxManager/build/CMakeFiles/Wols_CA_InboxManager.dir
+C:/Users/OskarPWWols/source/repos/Wols_CA_OutlookInboxManager/build/CMakeFiles/edit_cache.dir
+C:/Users/OskarPWWols/source/repos/Wols_CA_OutlookInboxManager/build/CMakeFiles/rebuild_cache.dir
+C:/Users/OskarPWWols/source/repos/Wols_CA_OutlookInboxManager/build/_deps/json-build/CMakeFiles/edit_cache.dir
+C:/Users/OskarPWWols/source/repos/Wols_CA_OutlookInboxManager/build/_deps/json-build/CMakeFiles/rebuild_cache.dir
